@@ -165,6 +165,45 @@ fn tab_bar_renders_endpoint_status_ellipses_and_clamps_to_useful_scroll() {
 }
 
 #[test]
+fn tab_bar_keeps_position_number_for_custom_tab_labels() {
+    let mut projected = snapshot();
+    projected.tabs = vec![
+        ClientShellTab {
+            tab_id: "tab_1".into(),
+            workspace_id: "ws_1".into(),
+            number: 1,
+            label: "api".into(),
+            custom_label: true,
+            zoomed: false,
+            focused: true,
+            agent_status: AgentStatus::Idle,
+        },
+        ClientShellTab {
+            tab_id: "tab_2".into(),
+            workspace_id: "ws_1".into(),
+            number: 2,
+            label: "2".into(),
+            custom_label: false,
+            zoomed: false,
+            focused: false,
+            agent_status: AgentStatus::Idle,
+        },
+    ];
+    let mut config = ClientShellConfig::from_config(&Config::default());
+    config.mobile_width_threshold = 0;
+    let mut state = ClientShellState::new(config);
+    state.set_snapshot(Box::new(projected));
+    state.set_pane_surface(surface());
+    let frame = state.compose(80, 20).expect("tab bar");
+    let top = frame.cells[..frame.width as usize]
+        .iter()
+        .map(|cell| cell.symbol.as_str())
+        .collect::<String>();
+    assert!(top.contains("1: api"), "top row: {top:?}");
+    assert!(top.contains("2"), "top row: {top:?}");
+}
+
+#[test]
 fn configured_prefix_is_client_owned_and_renders_its_bar() {
     let config = toml::from_str::<Config>(
         r#"
