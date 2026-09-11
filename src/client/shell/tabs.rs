@@ -23,8 +23,9 @@ pub(crate) fn render_tab_bar(
         .collect::<Vec<_>>();
     let desired_widths = tabs
         .iter()
-        .map(|tab| {
-            let label = tab_label(tab);
+        .enumerate()
+        .map(|(index, tab)| {
+            let label = tab_label(tab, index);
             display_width(&label).saturating_add(4).max(MIN_TAB_WIDTH)
         })
         .collect::<Vec<_>>();
@@ -92,7 +93,7 @@ pub(crate) fn render_tab_bar(
     let mut first_visible = None;
     let mut last_visible = None;
     for (index, tab) in tabs.iter().enumerate().skip(*tab_scroll) {
-        let name = tab_label(tab);
+        let name = tab_label(tab, index);
         let desired = desired_widths[index];
         let remaining = tab_right.saturating_sub(x);
         let width = desired.min(remaining);
@@ -371,11 +372,16 @@ fn max_tab_scroll(widths: &[u16], available: u16) -> usize {
     start
 }
 
-fn tab_label(tab: &ClientShellTab) -> String {
-    if tab.zoomed {
-        format!("{} Z", tab.label)
+fn tab_label(tab: &ClientShellTab, index: usize) -> String {
+    let label = if tab.custom_label {
+        format!("{}: {}", index + 1, tab.label)
     } else {
         tab.label.clone()
+    };
+    if tab.zoomed {
+        format!("{label} Z")
+    } else {
+        label
     }
 }
 
