@@ -627,6 +627,32 @@ mod tests {
     use super::*;
 
     #[test]
+    fn snapshot_marks_custom_named_tabs_and_keeps_label() {
+        let (_api_tx, api_rx) = tokio::sync::mpsc::unbounded_channel();
+        let mut app = crate::app::App::new(
+            &crate::config::Config::default(),
+            crate::app::AppPolicy::TEST,
+            None,
+            api_rx,
+            crate::api::EventHub::default(),
+        );
+        let mut workspace = crate::workspace::Workspace::test_new("snapshot");
+        workspace.tabs[0].set_custom_name("api".into());
+        app.state.workspaces = vec![workspace];
+        app.state.ensure_test_terminals();
+        app.state.active = Some(0);
+
+        let snapshot = snapshot(&app, "boot", 1, None, None);
+        let tab = &snapshot.tabs[0];
+
+        assert_eq!(tab.label, "api");
+        assert!(
+            tab.custom_label,
+            "custom-named tab must report custom_label"
+        );
+    }
+
+    #[test]
     fn snapshot_projects_cached_release_and_update_facts() {
         let (_api_tx, api_rx) = tokio::sync::mpsc::unbounded_channel();
         let mut app = crate::app::App::new(

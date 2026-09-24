@@ -237,6 +237,58 @@ fn tab_bar_keeps_position_number_for_custom_tab_labels() {
 }
 
 #[test]
+fn rename_tab_overlay_replaces_auto_number_but_edits_custom_name() {
+    let setup = |label: &str, custom_label: bool| {
+        let mut projected = snapshot();
+        projected.tabs = vec![ClientShellTab {
+            tab_id: "tab_1".into(),
+            workspace_id: "ws_1".into(),
+            number: 1,
+            label: label.into(),
+            custom_label,
+            zoomed: false,
+            focused: true,
+            agent_status: AgentStatus::Idle,
+        }];
+        projected.focused_tab_id = Some("tab_1".into());
+        let mut config = ClientShellConfig::from_config(&Config::default());
+        config.mobile_width_threshold = 0;
+        let mut state = ClientShellState::new(config);
+        state.set_snapshot(Box::new(projected));
+        state.set_pane_surface(surface());
+        state
+    };
+
+    let mut auto = setup("1", false);
+    auto.open_rename_tab_overlay();
+    auto.handle_input_bytes(b"api");
+    match auto.overlay.as_ref() {
+        Some(ClientShellOverlay::Rename(rename)) => {
+            assert_eq!(
+                rename.input.as_str(),
+                "api",
+                "auto-named tab must replace the number"
+            );
+        }
+        other => panic!("expected rename overlay, got {other:?}"),
+    }
+
+    let mut custom = setup("api", true);
+    custom.open_rename_tab_overlay();
+    custom.handle_input_bytes(b"dev");
+    match custom.overlay.as_ref() {
+        Some(ClientShellOverlay::Rename(rename)) => {
+            assert_eq!(
+                rename.input.as_str(),
+                "apidev",
+                "custom-named tab must keep editing its name"
+            );
+        }
+        other => panic!("expected rename overlay, got {other:?}"),
+    }
+}
+
+#[test]
 fn configured_prefix_is_client_owned_and_renders_its_bar() {
     let config = toml::from_str::<Config>(
         r#"
