@@ -10,6 +10,10 @@ permissions:
 
 env:
   UPSTREAM_REPOSITORY: herdrdev/herdr
+  # Only release tags are mirrored. Upstream preview-* tags point at historical
+  # commits whose workflow files are not in this fork's history, and pushing
+  # those is rejected because GITHUB_TOKEN has no `workflows` permission.
+  TAG_PATTERN: "v*"
 
 concurrency:
   group: sync-upstream-tags
@@ -30,7 +34,7 @@ jobs:
         run: |
           set -euo pipefail
           git remote add upstream "https://github.com/${UPSTREAM_REPOSITORY}.git"
-          git fetch --no-tags upstream "refs/tags/*:refs/tags/*"
+          git fetch --no-tags upstream "refs/tags/${TAG_PATTERN}:refs/tags/${TAG_PATTERN}"
 
       - name: Push missing tags
         run: |
@@ -41,16 +45,35 @@ jobs:
             | sort -u > "$RUNNER_TEMP/origin-tags.txt"
 
           failed=0
+          deferred=""
           while read -r tag; do
             if grep -qxF "$tag" "$RUNNER_TEMP/origin-tags.txt"; then
               continue
             fi
             echo "pushing $tag"
-            if ! git push origin "refs/tags/$tag"; then
-              echo "::warning::failed to push tag $tag" >&2
-              failed=1
+            if output="$(git push origin "refs/tags/$tag" 2>&1)"; then
+              echo "$output"
+              continue
             fi
-          done < <(git tag --list)
+            echo "$output" >&2
+            if grep -q "without .workflows. permission" <<<"$output"; then
+              echo "::warning::deferred $tag: workflow files are not in this fork yet; it will sync after upstream master is merged" >&2
+              deferred="${deferred}${tag} "
+              continue
+            fi
+            echo "::error::failed to push tag $tag" >&2
+            failed=1
+          done < <(git tag --list "$TAG_PATTERN")
+
+          if [ -n "$deferred" ]; then
+            {
+              echo "### Deferred tags"
+              echo
+              echo "These tags need a newer upstream merge in \`master\` before they can be mirrored:"
+              echo
+              for tag in $deferred; do echo "- \`$tag\`"; done
+            } >> "$GITHUB_STEP_SUMMARY"
+          fi
 
           if [ "$failed" -ne 0 ]; then
             echo "::error::some upstream tags could not be pushed" >&2
